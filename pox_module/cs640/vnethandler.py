@@ -8,7 +8,6 @@ from pox.lib.packet import ethernet
 import time
 
 import threading
-import asyncore
 import collections
 import logging
 import socket
@@ -20,9 +19,9 @@ from twisted.python import threadable
 from threading import Thread
 
 from twisted.internet import reactor
-from VNSProtocol import VNS_DEFAULT_PORT, create_vns_server
-from VNSProtocol import VNSOpen, VNSClose, VNSPacket 
-from VNSProtocol import VNSInterface, VNSSwitchInterface, VNSHardwareInfo
+from .VNSProtocol import VNS_DEFAULT_PORT, create_vns_server
+from .VNSProtocol import VNSOpen, VNSClose, VNSPacket
+from .VNSProtocol import VNSInterface, VNSSwitchInterface, VNSHardwareInfo
 
 log = core.getLogger()
 
