@@ -94,12 +94,6 @@ public class Router extends Device
 		
 		/********************************************************************/
 		/* TODO: Handle packets                                             */
-		if (etherPacket.getEtherType() == Ethernet.TYPE_ARP)
-		{
-			handleArpPacket(etherPacket, inIface);
-			return;
-		}
-
 		if (etherPacket.getEtherType() != Ethernet.TYPE_IPv4)
 		{ return; }
 
@@ -107,30 +101,21 @@ public class Router extends Device
 		if (!isValidIpv4Checksum(ipPacket))
 		{ return; }
 
-		// Check if destined for router interface
-		Iface localIface = getLocalIfaceByIp(ipPacket.getDestinationAddress());
-		if (null != localIface)
-		{
-			handlePacketToRouter(etherPacket, ipPacket, inIface, localIface);
-			return;
-		}
-
-		// Forwarding path: decrement TTL then route
+		// Forwarding path: decrement TTL then route; silently drop on errors
 		byte ttl = ipPacket.getTtl();
 		if (ttl <= 1)
-		{
-			sendIcmpError(etherPacket, inIface, (byte)11, (byte)0); // Time exceeded
-			return;
-		}
+		{ return; }
 		ipPacket.setTtl((byte)(ttl - 1));
 		ipPacket.resetChecksum();
 
+		// If packet is destined to a router interface, drop
+		Iface localIface = getLocalIfaceByIp(ipPacket.getDestinationAddress());
+		if (null != localIface)
+		{ return; }
+
 		RouteEntry bestMatch = this.routeTable.lookup(ipPacket.getDestinationAddress());
 		if (null == bestMatch)
-		{
-			sendIcmpError(etherPacket, inIface, (byte)3, (byte)0); // Net unreachable
-			return;
-		}
+		{ return; }
 
 		Iface outIface = bestMatch.getInterface();
 		int nextHopIp = bestMatch.getGatewayAddress();
