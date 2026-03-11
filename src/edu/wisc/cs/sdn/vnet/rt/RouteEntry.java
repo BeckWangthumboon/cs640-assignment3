@@ -21,6 +21,18 @@ public class RouteEntry
 	/** Router interface out which packets should be sent to reach
 	 * the destination or gateway */
 	private Iface iface;
+
+	/** RIP metric for this route (1-16); informational for static routes */
+	private int metric;
+
+	/** True if route represents a directly-connected subnet */
+	private boolean directlyConnected;
+
+	/** True if route was learned via RIP */
+	private boolean ripLearned;
+
+	/** Last time (ms since epoch) this route was refreshed */
+	private long lastUpdated;
 	
 	/**
 	 * Create a new route table entry.
@@ -37,6 +49,10 @@ public class RouteEntry
 		this.gatewayAddress = gatewayAddress;
 		this.maskAddress = maskAddress;
 		this.iface = iface;
+		this.metric = 1;
+		this.directlyConnected = false;
+		this.ripLearned = false;
+		this.lastUpdated = System.currentTimeMillis();
 	}
 	
 	/**
@@ -69,6 +85,30 @@ public class RouteEntry
 
 	public void setInterface(Iface iface)
 	{ this.iface = iface; }
+
+	public int getMetric()
+	{ return this.metric; }
+
+	public void setMetric(int metric)
+	{ this.metric = metric; }
+
+	public boolean isDirectlyConnected()
+	{ return this.directlyConnected; }
+
+	public void setDirectlyConnected(boolean directlyConnected)
+	{ this.directlyConnected = directlyConnected; }
+
+	public boolean isRipLearned()
+	{ return this.ripLearned; }
+
+	public void setRipLearned(boolean ripLearned)
+	{ this.ripLearned = ripLearned; }
+
+	public long getLastUpdated()
+	{ return this.lastUpdated; }
+
+	public void setLastUpdated(long lastUpdated)
+	{ this.lastUpdated = lastUpdated; }
 	
 	public String toString()
 	{

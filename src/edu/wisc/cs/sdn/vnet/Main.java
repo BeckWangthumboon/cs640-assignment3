@@ -85,13 +85,17 @@ public class Main
 		
 		if (dev instanceof Router) 
 		{
+			Router router = (Router)dev;
+
 			// Read static route table
 			if (routeTableFile != null)
-			{ ((Router)dev).loadRouteTable(routeTableFile); }
+			{ router.loadRouteTable(routeTableFile); }
+			else
+			{ router.startRip(); }
 			
 			// Read static ACP cache
 			if (arpCacheFile != null)
-			{ ((Router)dev).loadArpCache(arpCacheFile); }
+			{ router.loadArpCache(arpCacheFile); }
 		}
 
 		// Read messages from the server until the server closes the connection

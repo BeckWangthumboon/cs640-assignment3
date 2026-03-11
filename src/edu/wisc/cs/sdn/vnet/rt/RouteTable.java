@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -160,13 +161,14 @@ public class RouteTable
 	 * @param iface router interface out which to send packets to reach the 
 	 *		destination or gateway
 	 */
-	public void insert(int dstIp, int gwIp, int maskIp, Iface iface)
+	public RouteEntry insert(int dstIp, int gwIp, int maskIp, Iface iface)
 	{
 		RouteEntry entry = new RouteEntry(dstIp, gwIp, maskIp, iface);
 		synchronized(this.entries)
 		{ 
 			this.entries.add(entry);
 		}
+		return entry;
 	}
 	
 	/**
@@ -179,7 +181,7 @@ public class RouteTable
 	{ 
 		synchronized(this.entries)
 		{
-			RouteEntry entry = this.find(dstIp, maskIp);
+			RouteEntry entry = this.lookupExact(dstIp, maskIp);
 			if (null == entry) { return false; }
 			this.entries.remove(entry);
 		}
@@ -198,7 +200,7 @@ public class RouteTable
 	{
 		synchronized(this.entries)
 		{
-			RouteEntry entry = this.find(dstIp, maskIp);
+			RouteEntry entry = this.lookupExact(dstIp, maskIp);
 			if (null == entry) { return false; }
 			entry.setGatewayAddress(gwIp);
 			entry.setInterface(iface);
@@ -212,7 +214,7 @@ public class RouteTable
 	 * @param maskIp subnet mask of the entry to find
 	 * @return a matching entry if one was found, otherwise null
 	 */
-	private RouteEntry find(int dstIp, int maskIp)
+	public RouteEntry lookupExact(int dstIp, int maskIp)
 	{
 		synchronized(this.entries)
 		{
@@ -224,6 +226,17 @@ public class RouteTable
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * @return a snapshot copy of route entries
+	 */
+	public List<RouteEntry> getEntriesSnapshot()
+	{
+		synchronized(this.entries)
+		{
+			return new ArrayList<RouteEntry>(this.entries);
+		}
 	}
 	
 	public String toString()
