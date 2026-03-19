@@ -1,88 +1,87 @@
-# CS640 Lab 2 Testing Guide (Checklist + Step-by-Step)
+# CS640 Lab 3 Testing Guide
 
-This guide follows `CS640_Lab_2.pdf` and matches this repo.
+This guide follows `CS640-Lab3-1.pdf` and focuses on RIP-based router testing.
 
-## 1) Test Case Checklist (from Lab 2)
+## 1) Test checklist
 
 Mark each one when done.
 
-### Switch topologies (Part 2)
+### Router RIP topologies
 
-- [] `topos/single_sw.topo`
-- [] `topos/linear5_sw.topo`
-- [] `topos/inclass_sw.topo`
-
-### Router topologies (Part 3)
-
-- [ ] `topos/single_rt.topo`
 - [ ] `topos/pair_rt.topo`
 - [ ] `topos/triangle_rt.topo`
 - [ ] `topos/linear5_rt.topo`
 
-### Combined switch + router topologies
+### Mixed switch + router topology
 
-- [ ] `topos/single_each.topo`
 - [ ] `topos/triangle_with_sw.topo`
 
-## 2) Setup (one-time, then quick checks before each test)
+### Optional switch smoke tests
 
-### One-time setup
+- [ ] `topos/single_sw.topo`
+- [ ] `topos/linear5_sw.topo`
+
+## 2) One-time setup
 
 ```bash
-cd ~/Projects/assign2
+cd ~/assign3
 ./config.sh
 ```
 
-### Build before testing
+## 3) Build before each test run
 
 ```bash
-cd ~/Projects/assign2
+cd ~/assign3
 ant clean
 ant
 ```
 
-### Open 3 terminals for each test run
+## 4) Standard Lab 3 test flow
+
+Open 3 terminals:
 
 - Terminal A: Mininet
 - Terminal B: POX
 - Terminal C: VirtualNetwork device process(es)
 
-## 3) Running a Test Case (same flow every time)
-
-Use these steps for each topology in the checklist.
-
-### Step 1: Start Mininet (Terminal A)
+### Step 1: Start Mininet
 
 ```bash
-cd ~/Projects/assign2
+cd ~/assign3
 sudo ./run_mininet.py <TOPO_FILE> -a
 ```
 
 Example:
 
 ```bash
-sudo ./run_mininet.py topos/single_sw.topo -a
+sudo ./run_mininet.py topos/pair_rt.topo -a
 ```
 
-### Step 2: Start POX (Terminal B)
+Notes:
+
+- `-a` preloads static ARP entries into hosts.
+- `run_mininet.py` may generate `rtable.rX`, but Lab 3 router launches should
+  ignore those files.
+
+### Step 2: Start POX
 
 ```bash
-cd ~/Projects/assign2
+cd ~/assign3
 ./run_pox.sh
 ```
 
-Wait until POX shows the OpenFlow device connection(s). Do not start Java first.
+Wait until POX shows the OpenFlow device connections.
 
-### Step 3: Start all required devices (Terminal C)
+### Step 3: Start switches and routers
 
-Option A (recommended): start all devices automatically from topology file.
+Option A: helper script
 
 ```bash
-cd ~/Projects/assign2
+cd ~/assign3
 ./run_devices.sh start <TOPO_FILE> --kill-first
 ```
 
-Option B (manual): start one Java process per switch/router.
+Option B: manual mode
 
 Switch form:
 
@@ -90,39 +89,112 @@ Switch form:
 java -jar VirtualNetwork.jar -v sX
 ```
 
-Router form:
+Router form for Lab 3 RIP mode:
 
 ```bash
-java -jar VirtualNetwork.jar -v rX -r rtable.rX -a arp_cache
+java -jar VirtualNetwork.jar -v rX -a arp_cache
 ```
 
-If topology has multiple devices, run all of them.
+Important:
 
-### Step 4: Run traffic tests in Mininet CLI (Terminal A)
+- Do not pass `-r rtable.rX` in Lab 3.
+- RIP should start only when the router is launched without `-r`.
 
-For any topology, run:
+### Step 4: Allow RIP to converge
+
+Wait about 10 to 15 seconds before declaring failure on multi-router
+topologies. RIP requests are sent immediately, but route exchange may take a
+short moment to settle.
+
+### Step 5: Run connectivity tests
+
+At the Mininet prompt:
 
 ```bash
 pingall
 ```
 
-For switch-focused verification, also run at least one HTTP fetch:
+If needed, retry after a short wait.
+
+For a more focused path check:
 
 ```bash
-h1 curl -s 10.0.1.102 | head
+h1 traceroute -n <destination-host-ip>
 ```
 
-If `h1`/IP is not in the topology, use any host and destination host IP from that topology.
+Pass criteria:
 
-### Step 5: Record result
+- hosts in different subnets become reachable
+- traceroute shows routing across the expected routers
 
-- Pass if `pingall` reports 0% dropped (or expected success between reachable hosts).
-- Pass switch test when `curl` returns HTML content.
-- Mark the corresponding checkbox in Section 1.
+### Step 6: Run failover test
 
-## 4) Exact Device Commands by Topology (manual mode reference)
+Use `topos/triangle_rt.topo`.
 
-### Switch topologies
+1. Confirm connectivity first with `pingall`.
+2. Stop one router process, for example by pressing Ctrl-C in the `r1` process.
+3. Wait about 35 to 45 seconds.
+4. Run connectivity checks again.
+
+Expected result:
+
+- traffic should recover using the alternate path after RIP reconverges
+
+### Step 7: Optional packet capture
+
+From the Mininet CLI:
+
+```bash
+xterm h1
+```
+
+Then in the new xterm:
+
+```bash
+sudo tcpdump -n -vv -e -i h1-eth0
+```
+
+This is useful for verifying RIP timing or forwarded traffic headers.
+
+## 5) Exact device commands by topology
+
+### `topos/pair_rt.topo`
+
+```bash
+java -jar VirtualNetwork.jar -v r1 -a arp_cache
+java -jar VirtualNetwork.jar -v r2 -a arp_cache
+```
+
+### `topos/triangle_rt.topo`
+
+```bash
+java -jar VirtualNetwork.jar -v r1 -a arp_cache
+java -jar VirtualNetwork.jar -v r2 -a arp_cache
+java -jar VirtualNetwork.jar -v r3 -a arp_cache
+```
+
+### `topos/linear5_rt.topo`
+
+```bash
+java -jar VirtualNetwork.jar -v r1 -a arp_cache
+java -jar VirtualNetwork.jar -v r2 -a arp_cache
+java -jar VirtualNetwork.jar -v r3 -a arp_cache
+java -jar VirtualNetwork.jar -v r4 -a arp_cache
+java -jar VirtualNetwork.jar -v r5 -a arp_cache
+```
+
+### `topos/triangle_with_sw.topo`
+
+```bash
+java -jar VirtualNetwork.jar -v s1
+java -jar VirtualNetwork.jar -v s2
+java -jar VirtualNetwork.jar -v s3
+java -jar VirtualNetwork.jar -v r1 -a arp_cache
+java -jar VirtualNetwork.jar -v r2 -a arp_cache
+java -jar VirtualNetwork.jar -v r3 -a arp_cache
+```
+
+### Optional switch-only topologies
 
 `topos/single_sw.topo`
 
@@ -140,102 +212,27 @@ java -jar VirtualNetwork.jar -v s4
 java -jar VirtualNetwork.jar -v s5
 ```
 
-`topos/inclass_sw.topo`
+## 6) Cleanup between tests
 
-```bash
-java -jar VirtualNetwork.jar -v s1
-java -jar VirtualNetwork.jar -v s2
-java -jar VirtualNetwork.jar -v s3
-java -jar VirtualNetwork.jar -v s4
-java -jar VirtualNetwork.jar -v s5
-```
-
-### Router topologies
-
-`topos/single_rt.topo`
-
-```bash
-java -jar VirtualNetwork.jar -v r1 -r rtable.r1 -a arp_cache
-```
-
-`topos/pair_rt.topo`
-
-```bash
-java -jar VirtualNetwork.jar -v r1 -r rtable.r1 -a arp_cache
-java -jar VirtualNetwork.jar -v r2 -r rtable.r2 -a arp_cache
-```
-
-`topos/triangle_rt.topo`
-
-```bash
-java -jar VirtualNetwork.jar -v r1 -r rtable.r1 -a arp_cache
-java -jar VirtualNetwork.jar -v r2 -r rtable.r2 -a arp_cache
-java -jar VirtualNetwork.jar -v r3 -r rtable.r3 -a arp_cache
-```
-
-`topos/linear5_rt.topo`
-
-```bash
-java -jar VirtualNetwork.jar -v r1 -r rtable.r1 -a arp_cache
-java -jar VirtualNetwork.jar -v r2 -r rtable.r2 -a arp_cache
-java -jar VirtualNetwork.jar -v r3 -r rtable.r3 -a arp_cache
-java -jar VirtualNetwork.jar -v r4 -r rtable.r4 -a arp_cache
-java -jar VirtualNetwork.jar -v r5 -r rtable.r5 -a arp_cache
-```
-
-### Combined topologies
-
-`topos/single_each.topo`
-
-```bash
-java -jar VirtualNetwork.jar -v s1
-java -jar VirtualNetwork.jar -v r1 -r rtable.r1 -a arp_cache
-```
-
-`topos/triangle_with_sw.topo`
-
-```bash
-java -jar VirtualNetwork.jar -v s1
-java -jar VirtualNetwork.jar -v s2
-java -jar VirtualNetwork.jar -v s3
-java -jar VirtualNetwork.jar -v r1 -r rtable.r1 -a arp_cache
-java -jar VirtualNetwork.jar -v r2 -r rtable.r2 -a arp_cache
-java -jar VirtualNetwork.jar -v r3 -r rtable.r3 -a arp_cache
-```
-
-## 5) Cleanup / Reset Between Test Cases
-
-Run this before starting the next topology.
-
-### In Mininet terminal
+In the Mininet terminal:
 
 ```bash
 exit
 ```
 
-### Stop VirtualNetwork processes
+Stop VirtualNetwork processes:
 
 ```bash
-cd ~/Projects/assign2
+cd ~/assign3
 ./run_devices.sh stop
 ```
 
-(Equivalent manual kill)
+Optional manual cleanup:
 
 ```bash
 pkill -f 'VirtualNetwork.jar -v' || true
-```
-
-### Optional: stop POX
-
-```bash
 pkill -f pox.py || true
-```
-
-### Clean Mininet state
-
-```bash
 sudo mn -c
 ```
 
-After cleanup, start the next test case from Section 3 Step 1.
+After cleanup, start the next test from Section 4 Step 1.

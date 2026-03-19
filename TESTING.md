@@ -1,140 +1,186 @@
-# CS640 Assignment 2 – Script Summary + Test Instructions
+# CS640 Assignment 3 - RIP Script Summary and Test Instructions
+
+## What changed in Lab 3
+
+Assignment 3 replaces static routing with distance-vector routing using
+RIPv2. Your router should:
+
+- start RIP only when `VirtualNetwork.jar` is launched without `-r`
+- add directly connected subnets to its route table at startup
+- send an initial RIP request on all interfaces
+- send unsolicited RIP responses every 10 seconds
+- time out RIP-learned routes after 30 seconds without updates
+
+Because of that, Lab 3 router tests should not pass `-r rtable.rX`.
 
 ## What each script/file does
 
 - `config.sh`
   - Runs POX module setup:
   - `cd pox_module && sudo python setup.py develop`
-  - Do this once per fresh VM/setup.
+  - Run this once per fresh VM/setup.
 
 - `run_mininet.py <topo> [-a]`
-  - Starts Mininet with your chosen topology.
-  - Auto-generates:
+  - Starts Mininet with the chosen topology.
+  - Writes:
     - `ip_config`
     - `arp_cache`
-    - `rtable.<router>` files for router topologies
+    - legacy `rtable.<router>` files
   - Starts host HTTP servers.
   - `-a` preloads static ARP entries into hosts.
+  - In Lab 3, `arp_cache` is still useful, but `rtable.*` should be ignored.
 
 - `run_pox.sh`
   - Starts POX with the assignment handlers:
   - `cs640.ofhandler` and `cs640.vnethandler`
 
+- `run_devices.sh start <topo> [--log-dir <dir>] [--kill-first]`
+  - Starts all switches and routers in the topology.
+  - Routers are launched in Lab 3 RIP mode:
+  - `java -jar VirtualNetwork.jar -v rX -a arp_cache`
+
 - `build.xml`
-  - Ant build file:
   - `ant` compiles Java and builds `VirtualNetwork.jar`
-  - `ant clean` removes `bin/` and jar.
-
-- `VirtualNetwork.jar`
-  - Your switch/router executable.
-  - Run one instance per virtual device (e.g., `s1`, `r1`, etc.).
-
----
-
-## What I implemented
-
-- `src/edu/wisc/cs/sdn/vnet/sw/Switch.java`
-  - Learning switch (source MAC learning, known unicast forwarding, flooding unknown/broadcast/multicast, same-port drop, MAC aging timeout).
-
-- `src/edu/wisc/cs/sdn/vnet/rt/RouteTable.java`
-  - Longest-prefix-match route lookup.
-
-- `src/edu/wisc/cs/sdn/vnet/rt/Router.java`
-  - IPv4 forwarding pipeline:
-    - ARP request reply for router IPs
-    - IPv4 checksum validation
-    - TTL decrement + drop/send ICMP time exceeded
-    - LPM route lookup + forwarding via ARP cache
-    - ICMP echo reply when pinging router interface
-    - ICMP destination unreachable (net/port) where applicable
-
----
+  - `ant clean` removes `bin/` and the jar
 
 ## Prereqs
 
-On the Mininet VM (or equivalent assignment VM), ensure:
-- Python 2.7 available (for provided scripts)
-- Mininet + POX installed (as expected by course VM)
-- Java + Ant installed
+On the Mininet VM or equivalent assignment environment, ensure:
 
----
+- Python 2.7 is available for the provided scripts
+- Mininet and POX are installed
+- Java and Ant are installed
 
-## Standard run flow (3 terminals)
+## Standard run flow
+
+Use 3 terminals.
 
 ### Terminal 1: Mininet
+
 ```bash
-cd ~/assign2
-sudo ./run_mininet.py topos/single_sw.topo -a
+cd ~/assign3
+sudo ./run_mininet.py topos/pair_rt.topo -a
 ```
+
 Leave this open at the `mininet>` prompt.
 
 ### Terminal 2: POX
+
 ```bash
-cd ~/assign2
+cd ~/assign3
 ./run_pox.sh
 ```
-Wait until switch/router connects to POX.
 
-### Terminal 3: Build + device process
+Wait until POX shows the device connections.
+
+### Terminal 3: Build and start devices
+
 ```bash
-cd ~/assign2
+cd ~/assign3
 ant
-java -jar VirtualNetwork.jar -v s1
+./run_devices.sh start topos/pair_rt.topo --kill-first
 ```
-For router topologies, run with router name instead (example: `-v r1`).
-For multi-device topologies, run one process per device.
 
----
+Manual mode is also fine. In Lab 3, router commands should omit `-r`:
+
+```bash
+java -jar VirtualNetwork.jar -v r1 -a arp_cache
+java -jar VirtualNetwork.jar -v r2 -a arp_cache
+```
+
+## Recommended Lab 3 topologies
+
+- `topos/pair_rt.topo`
+  - Smallest RIP topology with more than one router.
+- `topos/triangle_rt.topo`
+  - Best starting point for redundant-path and failover testing.
+- `topos/triangle_with_sw.topo`
+  - Mixed switch/router topology.
+- `topos/linear5_rt.topo`
+  - Multi-hop RIP propagation test.
 
 ## Quick tests
 
-## A) Switch (single switch topology)
-Use `topos/single_sw.topo`.
+### A) Initial RIP convergence
 
-At Mininet prompt:
-```bash
-h1 ping -c 2 10.0.1.102
-h1 ping -c 2 10.0.1.103
-h2 curl -s 10.0.1.101 | head
-```
-Expected: pings and HTTP fetch succeed after MAC learning.
+Use `topos/pair_rt.topo` or `topos/triangle_rt.topo`.
 
-## B) Router basics
-Use `topos/single_rt.topo` (or whichever your course expects first).
+At the Mininet prompt:
 
-Run router process in Terminal 3:
 ```bash
-java -jar VirtualNetwork.jar -v r1
+pingall
 ```
-Then in Mininet:
-```bash
-h1 ping -c 2 <host-in-other-subnet>
-h1 traceroute -n <host-in-other-subnet>
-```
+
+If the topology does not converge immediately, wait 10 to 15 seconds and run
+the command again.
+
 Expected:
-- Inter-subnet forwarding works
-- TTL exhaustion paths produce ICMP time exceeded
-- Pings to router interface IPs get ICMP echo replies
 
-## C) Unreachable behavior
-Try a destination with no route / blocked port scenario per your topology.
-Expected ICMP unreachable responses from router where required.
+- hosts in different subnets become reachable without static route tables
+- repeated pings improve after routers exchange RIP updates
 
----
+### B) Multi-hop routing
+
+Use `topos/linear5_rt.topo`.
+
+At the Mininet prompt:
+
+```bash
+h1 ping -c 2 <far-end-host-ip>
+h1 traceroute -n <far-end-host-ip>
+```
+
+Expected:
+
+- end-to-end traffic works across multiple routers
+- traceroute shows a multi-hop path instead of a static single-router setup
+
+### C) Failover in a looped topology
+
+Use `topos/triangle_rt.topo`.
+
+1. Start all routers in RIP mode.
+2. Verify cross-subnet connectivity first.
+3. Stop one router process, for example `r1`.
+4. Wait about 35 to 45 seconds for RIP timeout and reconvergence.
+5. Test host-to-host connectivity again.
+
+Expected:
+
+- traffic should recover over the alternate path
+- directly connected routes should remain
+- only RIP-learned routes should age out
+
+### D) Optional packet inspection
+
+To inspect RIP or forwarded packets:
+
+```bash
+mininet> xterm h1
+sudo tcpdump -n -vv -e -i h1-eth0
+```
+
+You can also tail the device logs:
+
+```bash
+tail -f logs/*.log
+```
 
 ## Troubleshooting
 
-- If POX and Mininet don’t connect:
-  - Restart both in clean order (often POX first, then Mininet).
-- If stale processes interfere:
-  - rerun and let scripts kill stale HTTP servers; or reboot VM if messy.
-- If jar didn’t rebuild:
-  - `ant clean && ant`
-- If forwarding fails unexpectedly:
-  - verify generated `rtable.*` and `arp_cache` files in assignment directory.
+- If RIP never starts, make sure router commands do not include `-r`.
+- If routers fail to forward, verify `arp_cache` exists in the assignment root.
+- If POX and Mininet do not connect, restart them in a clean order.
+- If the jar is stale, run `ant clean && ant`.
+- If testing a redundant topology, allow time for the 30-second route timeout
+  and the next periodic RIP update.
+- `rtable.*` files may still be generated by `run_mininet.py`, but they are a
+  legacy byproduct for Lab 3 and should not be passed to the router.
 
----
+## Submission reminder
 
-## Repo tip
+Per the Lab 3 PDF, submit only a gzipped tar of the `src/` directory:
 
-If you copy to VM from GitHub, keep path as `~/assign2` (matching script assumptions and class instructions).
+```bash
+tar -czvf username1_username2.tgz src
+```

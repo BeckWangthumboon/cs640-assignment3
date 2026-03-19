@@ -13,7 +13,9 @@ Examples:
   ./run_devices.sh stop
 
 Notes:
-  - For router topologies, run Mininet first so rtable.rX and arp_cache exist.
+  - For Lab 3, routers are started in RIP mode without -r.
+  - Run Mininet first so arp_cache exists.
+  - run_mininet.py may still generate rtable.rX files, but they are ignored.
   - Logs are written to <log-dir>/<device>.log.
 EOF
 }
@@ -94,12 +96,6 @@ case "$cmd" in
       exit 1
     fi
 
-    for r in "${routers[@]}"; do
-      if [[ ! -f "rtable.$r" ]]; then
-        echo "Missing rtable.$r. Start Mininet first to generate route tables."
-        exit 1
-      fi
-    done
     if [[ ${#routers[@]} -gt 0 && ! -f "arp_cache" ]]; then
       echo "Missing arp_cache. Start Mininet first."
       exit 1
@@ -112,7 +108,7 @@ case "$cmd" in
       echo "Started switch $s (pid=$!, log=$log_dir/$s.log)"
     done
     for r in "${routers[@]}"; do
-      java -jar VirtualNetwork.jar -v "$r" -r "rtable.$r" -a arp_cache > "$log_dir/$r.log" 2>&1 &
+      java -jar VirtualNetwork.jar -v "$r" -a arp_cache > "$log_dir/$r.log" 2>&1 &
       pids+=("$!")
       echo "Started router $r (pid=$!, log=$log_dir/$r.log)"
     done
