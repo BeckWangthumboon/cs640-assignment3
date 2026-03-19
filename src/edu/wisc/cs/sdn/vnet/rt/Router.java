@@ -255,9 +255,10 @@ public class Router extends Device
 		}
 	}
 
-	private void processRipResponse(RIPv2 ripPacket, int neighborIp, Iface inIface)
+	private synchronized void processRipResponse(RIPv2 ripPacket, int neighborIp, Iface inIface)
 	{
 		long now = System.currentTimeMillis();
+		boolean routeTableChanged = false;
 		for (RIPv2Entry entry : ripPacket.getEntries())
 		{
 			if (entry.getAddressFamily() != RIPv2Entry.ADDRESS_FAMILY_IPv4)
@@ -281,6 +282,7 @@ public class Router extends Device
 				learned.setRipLearned(true);
 				learned.setDirectlyConnected(false);
 				learned.setLastUpdated(now);
+				routeTableChanged = true;
 				continue;
 			}
 
@@ -292,9 +294,14 @@ public class Router extends Device
 			if (sameNextHop)
 			{
 				if (metric >= RIP_INFINITY)
-				{ this.routeTable.remove(destIp, maskIp); }
+				{
+					this.routeTable.remove(destIp, maskIp);
+					routeTableChanged = true;
+				}
 				else
 				{
+					if (existing.getMetric() != metric)
+					{ routeTableChanged = true; }
 					existing.setMetric(metric);
 					existing.setLastUpdated(now);
 					existing.setGatewayAddress(neighborIp);
@@ -307,14 +314,21 @@ public class Router extends Device
 				existing.setLastUpdated(now);
 				existing.setGatewayAddress(neighborIp);
 				existing.setInterface(inIface);
+				routeTableChanged = true;
 			}
 		}
+
+		// Trigger an update when the table changes so new routes propagate
+		// immediately instead of waiting for the next periodic response.
+		if (routeTableChanged)
+		{ sendUnsolicitedRipResponses(); }
 	}
 
-	private void expireDynamicRoutes()
+	private synchronized void expireDynamicRoutes()
 	{
 		long now = System.currentTimeMillis();
 		List<RouteEntry> routes = this.routeTable.getEntriesSnapshot();
+		boolean routeTableChanged = false;
 		for (RouteEntry route : routes)
 		{
 			if (!route.isRipLearned())
@@ -324,7 +338,11 @@ public class Router extends Device
 			if (now - route.getLastUpdated() <= RIP_ROUTE_TIMEOUT_MS)
 			{ continue; }
 			this.routeTable.remove(route.getDestinationAddress(), route.getMaskAddress());
+			routeTableChanged = true;
 		}
+
+		if (routeTableChanged)
+		{ sendUnsolicitedRipResponses(); }
 	}
 
 	private void sendRipRequestOnAllInterfaces()
